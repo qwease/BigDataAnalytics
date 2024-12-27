@@ -8,7 +8,21 @@
 (def dbname "cloneDetector")
 (def partition-size 100)
 (def hostname (or (System/getenv "DBHOST") DEFAULT-DBHOST))
-(def collnames ["files"  "chunks" "candidates" "clones"])
+(def collnames ["files" "chunks" "candidates" "clones" "statusUpdates" "statistics" "processCompleted"])
+
+;; MODIFICATION: new function
+(defn addUpdate!
+  "Add a timestamped message to the statusUpdates collection"
+  [message]
+  (let [conn (mg/connect {:host hostname})
+        db   (mg/get-db conn dbname)]
+    (mc/insert db "statusUpdates" {:timestamp (java.time.LocalDateTime/now)
+                                   :message   message})))
+;; MODIFICATION: new function
+(defn mark-process-completed! []
+  (let [conn (mg/connect {:host hostname})        
+        db (mg/get-db conn dbname)]
+    (mc/insert db "processCompleted" {:timestamp (java.time.LocalDateTime/now)})))
 
 (defn print-statistics []
   (let [conn (mg/connect {:host hostname})        

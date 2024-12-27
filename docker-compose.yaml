@@ -1,4 +1,4 @@
-# Docker Compose for All-At-Once Code Clone Detection
+# docker-compose.yaml
 services:
   clone-detector:
     image: cljdetector
@@ -14,6 +14,22 @@ services:
       SOURCEDIReclipse: "/QualitasCorpus/QualitasCorpus-20130901r/Systems/eclipse_SDK"
       SOURCEDIR: "/QualitasCorpus"
       CHUNKSIZE: 20
+
+  monitor:
+    image: monitortool
+    ports:
+      - 8081:8080
+    environment:
+      DBHOST: dbstorage
+      LOG_INTERVAL: 1
+    volumes:
+      - ./archives:/app/archives  # Mount archives directory
+    depends_on:
+      - dbstorage
+      - clone-detector
+    deploy:
+      restart_policy:
+        condition: none
 
   dbstorage:
     image: mongo
@@ -32,4 +48,3 @@ volumes:
   dbconfig:
   qc-volume:
     external: true
-    

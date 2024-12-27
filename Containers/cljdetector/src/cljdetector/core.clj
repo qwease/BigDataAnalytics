@@ -8,13 +8,22 @@
 (def source-dir (or (System/getenv "SOURCEDIR") "/tmp"))
 (def source-type #".*\.java")
 
-(defn ts-println [& args]
-  (println (.toString (java.time.LocalDateTime/now)) args))
+;; MODIFICATION:
+(defn ts-println
+  "Prints a timestamped message to stdout and also adds it to the DB via addUpdate!"
+  [& args]
+  (let [timestamp-str (.toString (java.time.LocalDateTime/now))
+        message       (apply str (interpose " " args))
+        full-msg      (str timestamp-str " " message)]
+    ;; Print to console as before
+    (println full-msg)
+    ;; Add the same message to the database
+    (storage/addUpdate! full-msg)))
 
 (defn maybe-clear-db [args]
   (when (some #{"CLEAR"} (map string/upper-case args))
-      (ts-println "Clearing database...")
-      (storage/clear-db!)))
+    (ts-println "Clearing database...")
+    (storage/clear-db!)))
 
 (defn maybe-read-files [args]
   (when-not (some #{"NOREAD"} (map string/upper-case args))
@@ -48,8 +57,6 @@
     (ts-println "Consolidating and listing clones...")
     (pretty-print (storage/consolidate-clones-and-source))))
 
-
-
 (defn -main
   "Starting Point for All-At-Once Clone Detection
   Arguments:
@@ -58,10 +65,12 @@
    - NoCloneID do not detect clones
    - List print a list of all clones"
   [& args]
-
   (maybe-clear-db args)
   (maybe-read-files args)
   (maybe-detect-clones args)
   (maybe-list-clones args)
   (ts-println "Summary")
-  (storage/print-statistics))
+  (storage/print-statistics)
+
+  ;; MODIFICATION:
+  (storage/mark-process-completed!))

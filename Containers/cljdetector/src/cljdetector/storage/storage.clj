@@ -66,19 +66,69 @@
     (doseq [clone-group clones-parted]
       (mc/insert-batch db collname (map identity clone-group)))))
 
-(defn identify-candidates! []
-  (let [conn (mg/connect {:host hostname})        
-        db (mg/get-db conn dbname)
-        collname "chunks"]
-     (mc/aggregate db collname
-                   [{$group {:_id {:chunkHash "$chunkHash"}
-                             :numberOfInstances {$count {}}
-                             :instances {$push {:fileName "$fileName"
-                                                :startLine "$startLine"
-                                                :endLine "$endLine"}}}}
-                    {$match {:numberOfInstances {$gt 1}}}
-                    {"$out" "candidates"} ])))
+;; (defn identify-candidates! []
+;;   (let [conn (mg/connect {:host hostname})        
+;;         db (mg/get-db conn dbname)
+;;         collname "chunks"]
+;;      (mc/aggregate db collname
+;;                    [{$group {:_id {:chunkHash "$chunkHash"}
+;;                              :numberOfInstances {$count {}}
+;;                              :instances {$push {:fileName "$fileName"
+;;                                                 :startLine "$startLine"
+;;                                                 :endLine "$endLine"}}}}
+;;                     {$match {:numberOfInstances {$gt 1}}}
+;;                     {"$out" "candidates"} ])))
 
+;; MODIFICATION:
+(defn identify-candidates!
+  "Combine distinct chunkHash collection, partition them, and
+   run an aggregation for each chunk, merging into 'candidates'.
+   Ensures we have an index on 'chunkHash' to avoid error 51183."
+  ([] (identify-candidates! 500))
+  ([chunk-size]
+   (let [conn (mg/connect {:host hostname})
+         db   (mg/get-db conn dbname)
+         coll "chunks"]
+
+     ;; 1) Create (or ensure) that an index on chunkHash exists.
+     ;;    If you require chunkHash to be globally unique, set :unique true.
+     (mc/create-index db "candidates"
+                      (array-map :chunkHash 1)
+                      {:unique true})
+
+     ;; 2) Get distinct chunk hashes via a group pipeline (avoid mc/distinct 16MB limit).
+     (let [distinct-pipeline  [{:$group {:_id "$chunkHash"}}]
+           distinct-results    (mc/aggregate db coll distinct-pipeline)
+           all-chashes        (map :_id distinct-results)
+           partitions         (partition-all chunk-size all-chashes)
+           total              (count partitions)]
+
+       (println (format "Partitioned into %d chunks (chunk-size = %d)."
+                        total chunk-size))
+
+       ;; 3) For each subset of chunk hashes, run the aggregation pipeline.
+       (doseq [[idx chunk-group] (map-indexed vector partitions)]
+         (let [pipeline
+               [{:$match {:chunkHash {:$in chunk-group}}}
+                {:$group {:_id "$chunkHash"
+                          :numberOfInstances {:$count {}}
+                          :instances {:$push {:fileName  "$fileName"
+                                              :startLine "$startLine"
+                                              :endLine   "$endLine"}}}}
+                {:$match {:numberOfInstances {:$gt 1}}}
+                {:$set   {:chunkHash "$_id"}}
+                {:$unset :_id}
+                {:$merge {:into           "candidates"
+                          :on             "chunkHash"
+                          :whenMatched    "merge"
+                          :whenNotMatched "insert"}}]]
+           ;; Execute this chunk
+           (mc/aggregate db coll pipeline)
+           (println (format "Processed subset %d of %d."
+                            (inc idx) total))))
+
+       (println "Done. 'candidates' collection updated.")))))
+;; MODIFICATION:
 
 (defn consolidate-clones-and-source []
   (let [conn (mg/connect {:host hostname})        

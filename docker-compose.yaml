@@ -12,7 +12,7 @@ services:
       DBHOST: dbstorage
       SOURCEDIRtest: "/usr/src/app/test/data"
       SOURCEDIReclipse: "/QualitasCorpus/QualitasCorpus-20130901r/Systems/eclipse_SDK"
-      SOURCEDIR: "/QualitasCorpus"
+      SOURCEDIR: "/QualitasCorpus/QualitasCorpus-20130901r"
       CHUNKSIZE: 20
 
   monitor:

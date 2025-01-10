@@ -14,6 +14,7 @@ services:
       SOURCEDIReclipse: "/QualitasCorpus/QualitasCorpus-20130901r/Systems/eclipse_SDK"
       SOURCEDIR: "/QualitasCorpus/QualitasCorpus-20130901r"
       CHUNKSIZE: 20
+      CANDIDATE-CHUNKSIZE: 100000
 
   monitor:
     image: monitortool

@@ -5,8 +5,11 @@
             [monger.conversion :refer [from-db-object]]))
 
 (def DEFAULT-DBHOST "localhost")
+(def DEFAULT-CANDIDATE-CHUNKSIZE 100000)
 (def dbname "cloneDetector")
 (def partition-size 100)
+(def CANDIDATE-CHUNKSIZE-PARAM  (System/getenv "CANDIDATE-CHUNKSIZE"))
+(def CANDIDATE-CHUNKSIZE (if CANDIDATE-CHUNKSIZE-PARAM (Integer/parseInt CANDIDATE-CHUNKSIZE-PARAM) DEFAULT-CANDIDATE-CHUNKSIZE))
 (def hostname (or (System/getenv "DBHOST") DEFAULT-DBHOST))
 (def collnames ["files" "chunks" "candidates" "clones" "statusUpdates" "statistics" "processCompleted"])
 
@@ -84,7 +87,7 @@
   "Combine distinct chunkHash collection, partition them, and
    run an aggregation for each chunk, merging into 'candidates'.
    Ensures we have an index on 'chunkHash' to avoid error 51183."
-  ([] (identify-candidates! 500))
+  ([] (identify-candidates! CANDIDATE-CHUNKSIZE))
   ([chunk-size]
    (let [conn (mg/connect {:host hostname})
          db   (mg/get-db conn dbname)
@@ -95,7 +98,7 @@
      (mc/create-index db "candidates"
                       (array-map :chunkHash 1)
                       {:unique true})
-
+    
      ;; 2) Get distinct chunk hashes via a group pipeline (avoid mc/distinct 16MB limit).
      (let [distinct-pipeline  [{:$group {:_id "$chunkHash"}}]
            distinct-results    (mc/aggregate db coll distinct-pipeline)
